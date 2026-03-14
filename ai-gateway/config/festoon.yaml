@@ -1,0 +1,15 @@
+# Festoon Gateway — local development config
+#
+# Usage:
+#   cargo run -- -c ai-gateway/config/festoon.yaml
+#
+# Or set env var:
+#   AI_GATEWAY__WEBHOOK__URL=http://localhost:8000/api/gateway/ingest
+
+# Disable Helicone features — we don't need auth or observability.
+helicone:
+  features: none
+
+# POST captured request/response to Festoon API ingest endpoint.
+webhook:
+  url: "http://localhost:8000/api/gateway/ingest"

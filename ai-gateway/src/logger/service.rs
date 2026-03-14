@@ -7,6 +7,7 @@ use http_body_util::BodyExt;
 use indexmap::IndexMap;
 use opentelemetry::KeyValue;
 use reqwest::Client;
+use serde::Serialize;
 use tokio::{sync::oneshot, time::Instant};
 use typed_builder::TypedBuilder;
 use url::Url;
@@ -48,6 +49,20 @@ impl JawnClient {
     }
 }
 
+/// Payload POSTed to the Festoon webhook endpoint.
+#[derive(Debug, Serialize)]
+pub struct WebhookPayload {
+    pub provider: String,
+    pub model: String,
+    pub request_body: serde_json::Value,
+    pub response_body: serde_json::Value,
+    pub status_code: u16,
+    pub latency_ms: u64,
+    pub user_id: Option<String>,
+    pub org_slug: Option<String>,
+    pub properties: IndexMap<String, String>,
+}
+
 #[derive(Debug, TypedBuilder)]
 pub struct LoggerService {
     app_state: AppState,
@@ -82,6 +97,10 @@ impl LoggerService {
     #[allow(clippy::cast_precision_loss, clippy::too_many_lines)]
     pub async fn log(mut self) -> Result<(), LoggerError> {
         tracing::trace!("logging request");
+
+        // Clone request_body before response_body.collect() partially moves self.
+        let req_body_for_webhook = self.request_body.clone();
+
         let tfft_future = TFFTFuture::new(self.start_instant, self.tfft_rx);
         let collect_future = self.response_body.collect();
         let (response_body, tfft_duration) =
@@ -97,6 +116,24 @@ impl LoggerService {
         tracing::trace!(tfft_duration = ?tfft_duration, "tfft_duration");
         let req_body_len = self.request_body.len();
         let resp_body_len = response_body.len();
+
+        // --- Festoon webhook: POST full bodies to external endpoint ---
+        if let Some(webhook_url) = self.app_state.config().webhook.url.clone() {
+            send_webhook(
+                &self.app_state,
+                &self.auth_ctx,
+                &self.request_headers,
+                self.provider.clone(),
+                &self.mapper_ctx,
+                self.response_status,
+                webhook_url,
+                &req_body_for_webhook,
+                &response_body,
+                tfft_duration,
+            )
+            .await;
+        }
+
         let s3_client = if self.app_state.config().deployment_target.is_cloud()
         {
             MinioClient::cloud(&self.app_state.0.minio)
@@ -213,5 +250,165 @@ impl LoggerService {
 
         tracing::debug!("successfully logged request");
         Ok(())
+    }
+
+    /// POST the full request/response bodies to a webhook-only logger.
+    ///
+    /// This is used when Helicone observability is disabled but the webhook
+    /// is configured. Collects the response body and fires the webhook.
+    #[tracing::instrument(skip_all)]
+    pub async fn log_webhook_only(self) {
+        // Extract fields we need before collect() partially moves self.
+        let app_state = self.app_state;
+        let auth_ctx = self.auth_ctx;
+        let request_headers = self.request_headers;
+        let provider = self.provider;
+        let mapper_ctx = self.mapper_ctx;
+        let response_status = self.response_status;
+        let request_body = self.request_body;
+        let target_url = self.target_url;
+
+        let tfft_future = TFFTFuture::new(self.start_instant, self.tfft_rx);
+        let collect_future = self.response_body.collect();
+        let (response_body, tfft_duration) =
+            tokio::join!(collect_future, tfft_future);
+        let response_body = match response_body {
+            Ok(body) => body.to_bytes(),
+            Err(_) => {
+                tracing::error!("failed to collect response body for webhook");
+                return;
+            }
+        };
+        let tfft_duration = tfft_duration.unwrap_or_else(|_| {
+            Duration::from_secs(0)
+        });
+
+        // Record TFFT metric.
+        let model = mapper_ctx
+            .model
+            .as_ref()
+            .map_or_else(|| "unknown".to_string(), ToString::to_string);
+        let attributes = [
+            KeyValue::new("provider", provider.to_string()),
+            KeyValue::new("model", model),
+            KeyValue::new("path", target_url.path().to_string()),
+        ];
+        #[allow(clippy::cast_precision_loss)]
+        app_state
+            .0
+            .metrics
+            .tfft_duration
+            .record(tfft_duration.as_millis() as f64, &attributes);
+
+        if let Some(webhook_url) = app_state.config().webhook.url.clone() {
+            send_webhook(
+                &app_state,
+                &auth_ctx,
+                &request_headers,
+                provider.clone(),
+                &mapper_ctx,
+                response_status,
+                webhook_url,
+                &request_body,
+                &response_body,
+                tfft_duration,
+            )
+            .await;
+        }
+    }
+}
+
+/// Fire the webhook POST to the configured URL.
+async fn send_webhook(
+    app_state: &AppState,
+    auth_ctx: &AuthContext,
+    request_headers: &HeaderMap,
+    provider: InferenceProvider,
+    mapper_ctx: &MapperContext,
+    response_status: StatusCode,
+    webhook_url: Url,
+    request_body: &Bytes,
+    response_body: &Bytes,
+    latency: Duration,
+) {
+    let model = mapper_ctx
+        .model
+        .as_ref()
+        .map_or_else(|| "unknown".to_string(), ToString::to_string);
+
+    let provider_str = match provider {
+        InferenceProvider::Ollama => "custom".to_string(),
+        InferenceProvider::GoogleGemini => "google".to_string(),
+        provider => provider.to_string().to_lowercase(),
+    };
+
+    // Extract helicone-property-* headers as properties.
+    let mut properties = IndexMap::new();
+    for (name, value) in request_headers {
+        if name.as_str().starts_with("helicone-property-") {
+            if let Ok(value_str) = value.to_str() {
+                let key = name
+                    .as_str()
+                    .strip_prefix("helicone-property-")
+                    .unwrap_or(name.as_str())
+                    .to_string();
+                properties.insert(key, value_str.to_string());
+            }
+        }
+    }
+
+    // Extract user_id and org_slug from properties or auth context.
+    let user_id = properties
+        .swap_remove("X-Festoon-User")
+        .or_else(|| {
+            let uid = auth_ctx.user_id.to_string();
+            // Skip nil UUIDs (placeholder when auth is disabled).
+            if uid == "00000000-0000-0000-0000-000000000000" {
+                None
+            } else {
+                Some(uid)
+            }
+        });
+    let org_slug = properties.swap_remove("X-Festoon-Org");
+
+    let req_json: serde_json::Value =
+        serde_json::from_slice(request_body).unwrap_or_default();
+    let resp_json: serde_json::Value =
+        serde_json::from_slice(response_body).unwrap_or_default();
+
+    let payload = WebhookPayload {
+        provider: provider_str,
+        model,
+        request_body: req_json,
+        response_body: resp_json,
+        status_code: response_status.as_u16(),
+        #[allow(clippy::cast_possible_truncation)]
+        latency_ms: latency.as_millis() as u64,
+        user_id,
+        org_slug,
+        properties,
+    };
+
+    match app_state
+        .0
+        .jawn_http_client
+        .request_client
+        .post(webhook_url.as_str())
+        .json(&payload)
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            tracing::debug!("webhook POST succeeded");
+        }
+        Ok(resp) => {
+            tracing::warn!(
+                status = %resp.status(),
+                "webhook POST returned non-success status"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "webhook POST failed");
+        }
     }
 }

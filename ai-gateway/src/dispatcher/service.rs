@@ -41,7 +41,7 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            MapperContext, PromptContext, RequestContext, RequestKind,
+            AuthContext, MapperContext, PromptContext, RequestContext, RequestKind,
         },
         model_id::ModelId,
         provider::InferenceProvider,
@@ -556,6 +556,42 @@ impl Dispatcher {
                     .instrument(tracing::Span::current()),
                 );
             }
+        } else if self.app_state.config().webhook.is_enabled() {
+            // Helicone observability is off, but webhook is configured.
+            // Build a LoggerService to collect the body and fire the webhook.
+            let auth_ctx = req_ctx.auth_context.clone().unwrap_or_else(|| {
+                use crate::types::{org::OrgId, user::UserId};
+                AuthContext {
+                    user_id: UserId::new(Uuid::nil()),
+                    org_id: OrgId::new(Uuid::nil()),
+                    api_key: crate::types::secret::Secret::from(String::new()),
+                }
+            });
+            let response_logger = LoggerService::builder()
+                .app_state(self.app_state.clone())
+                .auth_ctx(auth_ctx)
+                .start_time(start_time)
+                .start_instant(start_instant)
+                .target_url(target_url)
+                .request_headers(headers)
+                .request_body(req_body_bytes)
+                .response_status(client_response.status())
+                .response_body(response_body_for_logger)
+                .provider(self.provider.clone())
+                .tfft_rx(tfft_rx)
+                .mapper_ctx(mapper_ctx.clone())
+                .router_id(router_id)
+                .deployment_target(deployment_target)
+                .request_id(helicone_request_id)
+                .prompt_ctx(prompt_ctx)
+                .build();
+
+            tokio::spawn(
+                async move {
+                    response_logger.log_webhook_only().await;
+                }
+                .instrument(tracing::Span::current()),
+            );
         } else {
             let app_state = self.app_state.clone();
             let model = mapper_ctx.model.as_ref().map_or_else(

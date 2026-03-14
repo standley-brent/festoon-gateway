@@ -17,6 +17,7 @@ pub mod retry;
 pub mod router;
 pub mod server;
 pub mod validation;
+pub mod webhook;
 use std::path::PathBuf;
 
 use config::ConfigError;
@@ -96,6 +97,8 @@ pub struct Config {
     /// requests to the unified API (`/ai`)
     pub unified_api: MiddlewareConfig,
     pub routers: self::router::RouterConfigs,
+    /// Festoon webhook: POST full request/response to an external endpoint.
+    pub webhook: self::webhook::WebhookConfig,
 }
 
 impl Config {
@@ -219,6 +222,7 @@ impl crate::tests::TestDefault for Config {
             routers: self::router::RouterConfigs::test_default(),
             response_headers:
                 self::response_headers::ResponseHeadersConfig::default(),
+            webhook: self::webhook::WebhookConfig::default(),
         }
     }
 }

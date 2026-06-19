@@ -113,6 +113,21 @@ hyperbolic:
     - "NousResearch/Hermes-3-Llama-3.1-70B"
   base-url: https://api.hyperbolic.xyz/
 
+cohere:
+  models:
+    - "command-a-plus-05-2026"
+    - "command-a-03-2025"
+    - "command-a-reasoning-08-2025"
+    - "command-a-vision-07-2025"
+    - "command-a-translate-08-2025"
+    - "command-r7b-12-2024"
+    - "command-r-08-2024"
+    - "command-r-plus-08-2024"
+    - "command-r"
+    - "command-r-plus"
+  # Cohere's OpenAI-compatible endpoint; the gateway appends `v1/chat/completions`
+  base-url: https://api.cohere.ai/compatibility/
+
 ollama:
   models:
     - "deepseek-r1"

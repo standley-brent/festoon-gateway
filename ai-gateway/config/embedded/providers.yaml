@@ -128,6 +128,24 @@ cohere:
   # Cohere's OpenAI-compatible endpoint; the gateway appends `v1/chat/completions`
   base-url: https://api.cohere.ai/compatibility/
 
+huggingface:
+  # HF Inference Providers is itself a router over many backends (Together,
+  # Groq, SambaNova, Cerebras, ...). Append a policy suffix to a model id to
+  # steer routing, e.g. `:fastest` (default), `:cheapest`, or `:<provider>`.
+  models:
+    - "openai/gpt-oss-120b"
+    - "meta-llama/Llama-3.3-70B-Instruct"
+    - "meta-llama/Llama-3.1-8B-Instruct"
+    - "deepseek-ai/DeepSeek-V4-Pro"
+    - "deepseek-ai/DeepSeek-V4-Flash"
+    - "Qwen/Qwen3-Coder-Next"
+    - "zai-org/GLM-5.2"
+    - "google/gemma-4-31B-it"
+    - "moonshotai/Kimi-K2.7-Code"
+    - "MiniMaxAI/MiniMax-M3"
+  # HF's OpenAI-compatible router; the gateway appends `v1/chat/completions`
+  base-url: https://router.huggingface.co/
+
 ollama:
   models:
     - "deepseek-r1"

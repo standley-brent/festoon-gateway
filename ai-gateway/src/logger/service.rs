@@ -98,7 +98,8 @@ impl LoggerService {
     pub async fn log(mut self) -> Result<(), LoggerError> {
         tracing::trace!("logging request");
 
-        // Clone request_body before response_body.collect() partially moves self.
+        // Clone request_body before response_body.collect() partially moves
+        // self.
         let req_body_for_webhook = self.request_body.clone();
 
         let tfft_future = TFFTFuture::new(self.start_instant, self.tfft_rx);
@@ -279,9 +280,8 @@ impl LoggerService {
                 return;
             }
         };
-        let tfft_duration = tfft_duration.unwrap_or_else(|_| {
-            Duration::from_secs(0)
-        });
+        let tfft_duration =
+            tfft_duration.unwrap_or_else(|_| Duration::from_secs(0));
 
         // Record TFFT metric.
         let model = mapper_ctx
@@ -358,17 +358,15 @@ async fn send_webhook(
     }
 
     // Extract user_id and org_slug from properties or auth context.
-    let user_id = properties
-        .swap_remove("X-Festoon-User")
-        .or_else(|| {
-            let uid = auth_ctx.user_id.to_string();
-            // Skip nil UUIDs (placeholder when auth is disabled).
-            if uid == "00000000-0000-0000-0000-000000000000" {
-                None
-            } else {
-                Some(uid)
-            }
-        });
+    let user_id = properties.swap_remove("X-Festoon-User").or_else(|| {
+        let uid = auth_ctx.user_id.to_string();
+        // Skip nil UUIDs (placeholder when auth is disabled).
+        if uid == "00000000-0000-0000-0000-000000000000" {
+            None
+        } else {
+            Some(uid)
+        }
+    });
     let org_slug = properties.swap_remove("X-Festoon-Org");
 
     let req_json: serde_json::Value =

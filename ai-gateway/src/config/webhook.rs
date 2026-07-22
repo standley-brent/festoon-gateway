@@ -5,7 +5,9 @@ use url::Url;
 ///
 /// When `url` is set, the gateway POSTs the full request/response bodies
 /// (as JSON) to this endpoint after every proxied AI request.
-#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq, Hash,
+)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct WebhookConfig {
     /// The URL to POST captured interactions to (e.g. http://localhost:8000/api/gateway/ingest).

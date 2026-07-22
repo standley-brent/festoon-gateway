@@ -41,7 +41,8 @@ use crate::{
     types::{
         body::BodyReader,
         extensions::{
-            AuthContext, MapperContext, PromptContext, RequestContext, RequestKind,
+            AuthContext, MapperContext, PromptContext, RequestContext,
+            RequestKind,
         },
         model_id::ModelId,
         provider::InferenceProvider,

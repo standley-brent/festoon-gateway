@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Festoon Fork Context (read first)
+
+- This repo is **Festoon's fork** of Helicone's ai-gateway. Festoon's delta is the **capture webhook**: the dispatcher tees each request/response and `logger/service.rs` POSTs it to the Festoon API ingest endpoint (auth via shared secret; org/user via `X-Festoon-Org` / `X-Festoon-User` headers).
+- Role: **Channel 2 (API/dev-tool capture)** in Festoon's multi-channel architecture — no longer the primary capture layer. See `docs/decisions/2026-07-22-synthesis-pivot.md` in the main `festoon` repo.
+- **Maintenance posture: upstream security syncs only.** Do not add features here unless explicitly asked; keep the Festoon delta minimal to ease upstream merges (`upstream` remote → Helicone/ai-gateway).
+- **License: GPL v3** (upstream relicensed from Apache 2.0 in Nov 2025). Do not describe this repo as Apache-licensed. Distributing modified binaries triggers GPL source obligations.
+
 ## Key Commands
 
 ### Development

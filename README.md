@@ -1,3 +1,31 @@
+# Festoon Gateway (fork of Helicone AI Gateway)
+
+> **Role in Festoon: one capture channel, not the spine.**
+>
+> This is Festoon's fork of [Helicone's ai-gateway](https://github.com/Helicone/ai-gateway)
+> (Rust). It proxies **API/dev-tool traffic** — anything with a configurable
+> base URL (Cursor, agent CLIs, SDKs, internal apps) — and POSTs each captured
+> request/response to the Festoon API ingest endpoint (the webhook addition in
+> `ai-gateway/src/logger/service.rs` + dispatcher wiring is the Festoon delta;
+> everything else is upstream).
+>
+> It is **Channel 2** in Festoon's multi-channel capture architecture
+> (Channel 1: MCP contribute loop + hooks; Channel 3: vendor compliance APIs).
+> It was formerly the primary capture layer; demoted per
+> [`docs/decisions/2026-07-22-synthesis-pivot.md`](https://github.com/standley-brent/festoon/blob/main/docs/decisions/2026-07-22-synthesis-pivot.md).
+>
+> **Maintenance posture:** upstream security syncs only; no feature work unless
+> customer traffic demands it.
+>
+> **License note:** upstream relicensed Apache 2.0 → **GPL v3** (Nov 2025);
+> this fork is **GPL v3** (see [LICENSE](LICENSE)). Running it as a hosted or
+> self-hosted service is fine; *distributing* modified binaries triggers GPL
+> source obligations; it cannot be combined into a proprietary distribution.
+
+---
+
+Upstream README follows.
+
 ![Helicone AI Gateway](https://marketing-assets-helicone.s3.us-west-2.amazonaws.com/github-w%3Alogo.png)
 
 # Helicone AI Gateway
@@ -5,7 +33,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/Helicone/ai-gateway?style=for-the-badge)](https://github.com/helicone/ai-gateway/)
 [![Downloads](https://img.shields.io/github/downloads/Helicone/ai-gateway/total?style=for-the-badge)](https://github.com/helicone/aia-gateway/releases)
 [![Docker pulls](https://img.shields.io/docker/pulls/helicone/ai-gateway?style=for-the-badge)](https://hub.docker.com/r/helicone/ai-gateway)
-[![License](https://img.shields.io/badge/license-APACHE-green?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 [![Public Beta](https://img.shields.io/badge/status-Public%20Beta-orange?style=for-the-badge)](https://github.com/helicone/ai-gateway)
 
 **The fastest, lightest, and easiest-to-integrate AI Gateway on the market.**
@@ -330,7 +358,7 @@ For a complete guide on self-hosting options, including Docker deployment, Kuber
 
 ## 📄 License
 
-The Helicone AI Gateway is licensed under the [Apache License](LICENSE) - see the file for details.
+The Helicone AI Gateway (and therefore this fork) is licensed under the [GNU General Public License v3.0](LICENSE) — see the file for details. Upstream relicensed from Apache 2.0 to GPL v3 in November 2025; Festoon's modifications are likewise GPL v3.
 
 ---
 

@@ -387,15 +387,19 @@ async fn send_webhook(
         properties,
     };
 
-    match app_state
+    let mut request = app_state
         .0
         .jawn_http_client
         .request_client
         .post(webhook_url.as_str())
-        .json(&payload)
-        .send()
-        .await
-    {
+        .json(&payload);
+
+    // Authenticate to the Festoon ingest endpoint when a secret is set.
+    if let Some(secret) = app_state.config().webhook.secret.as_ref() {
+        request = request.header("x-ingest-secret", secret);
+    }
+
+    match request.send().await {
         Ok(resp) if resp.status().is_success() => {
             tracing::debug!("webhook POST succeeded");
         }
